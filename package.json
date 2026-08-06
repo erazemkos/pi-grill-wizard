@@ -1,0 +1,48 @@
+{
+  "name": "pi-grill-wizard",
+  "version": "0.1.0",
+  "description": "Decision questionnaire and approval gate for Pi implementation work",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "questionnaire",
+    "approval-gate"
+  ],
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "src",
+    "skills",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "tsconfig.json"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "tsx": "^4.20.6",
+    "typebox": "^1.3.7",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
