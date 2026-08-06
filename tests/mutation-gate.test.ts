@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   gateAllowsMutation,
+  isGateActive,
   isReadOnlyShellCommand,
   mutationBlockReason,
   restoredToolSet,
@@ -51,12 +52,30 @@ test("blocks mutation, shell injection, generators, and dangerous read-command f
   }
 });
 
-test("blocks mutating and unknown tools before approval", () => {
+test("blocks mutating and unknown tools while a workflow is active", () => {
   assert.match(mutationBlockReason("reviewing", "write", { path: "x" }) ?? "", /blocks/);
-  assert.match(mutationBlockReason("idle", "apply_patch", {}) ?? "", /blocks/);
+  assert.match(mutationBlockReason("discovering", "apply_patch", {}) ?? "", /blocks/);
   assert.match(mutationBlockReason("answering", "third_party_generator", {}) ?? "", /blocks/);
   assert.equal(mutationBlockReason("discovering", "read", { path: "x" }), undefined);
   assert.equal(mutationBlockReason("discovering", "bash", { command: "git status" }), undefined);
+});
+
+test("inactive states never gate unrelated work", () => {
+  for (const state of ["idle", "cancelled"] as const) {
+    assert.equal(isGateActive(state), false);
+    assert.equal(gateAllowsMutation(state), true);
+    assert.equal(mutationBlockReason(state, "write", { path: "x" }), undefined);
+    assert.equal(mutationBlockReason(state, "third_party_generator", {}), undefined);
+    assert.equal(mutationBlockReason(state, "bash", { command: "npm install lodash" }), undefined);
+  }
+});
+
+test("active pre-approval states stay gated", () => {
+  for (const state of ["discovering", "preparing-questionnaire", "answering", "reviewing", "approved"] as const) {
+    assert.equal(isGateActive(state), true);
+    assert.equal(gateAllowsMutation(state), false);
+    assert.match(mutationBlockReason(state, "write", { path: "x" }) ?? "", /blocks/);
+  }
 });
 
 test("approval remains gated until dedicated implementing turn", () => {

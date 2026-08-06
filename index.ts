@@ -10,7 +10,7 @@ import {
   GRILL_HANDOFF_MARKER,
 } from "./src/implementation-handoff.ts";
 import {
-  gateAllowsMutation,
+  isGateActive,
   mutationBlockReason,
   restrictedToolSet,
   restoredToolSet,
@@ -85,6 +85,7 @@ function deriveTopic(ctx: ExtensionCommandContext): string {
 export default function grillWizardExtension(pi: ExtensionAPI): void {
   let workflow = cloneWorkflowData(INITIAL_STATE);
   let processToolBaseline: string[] = [];
+  let gateApplied = false;
 
   function persist(ctx: ExtensionContext): void {
     persistWorkflow(pi, ctx, workflow);
@@ -92,10 +93,20 @@ export default function grillWizardExtension(pi: ExtensionAPI): void {
   }
 
   function updateStatus(ctx: ExtensionContext): void {
+    if (!isGateActive(workflow.state)) {
+      ctx.ui.setStatus(STATUS_KEY, undefined);
+      return;
+    }
     const questionCount = workflow.questionnaire?.questions.length ?? 0;
     const answered = Object.keys(workflow.answers).length;
     const detail = questionCount > 0 ? ` ${answered}/${questionCount}` : "";
-    ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg(gateAllowsMutation(workflow.state) ? "success" : "warning", `grill:${workflow.state}${detail}`));
+    ctx.ui.setStatus(
+      STATUS_KEY,
+      ctx.ui.theme.fg(
+        workflow.state === "implementing" ? "success" : "warning",
+        `grill:${workflow.state}${detail}`,
+      ),
+    );
   }
 
   function setWorkflow(next: GrillWorkflowData, ctx: ExtensionContext): void {
@@ -111,6 +122,7 @@ export default function grillWizardExtension(pi: ExtensionAPI): void {
       toolsBeforeGate: restoredToolSet(processToolBaseline, workflow.toolsBeforeGate),
     };
     pi.setActiveTools([...new Set([...restrictedToolSet(active), TOOL_NAME])]);
+    gateApplied = true;
     updateStatus(ctx);
   }
 
@@ -122,12 +134,20 @@ export default function grillWizardExtension(pi: ExtensionAPI): void {
     ).filter((name) => registered.has(name));
     processToolBaseline = [...restored];
     pi.setActiveTools(restored);
+    gateApplied = false;
     updateStatus(ctx);
   }
 
   function applyToolsForState(ctx: ExtensionContext): void {
-    if (gateAllowsMutation(workflow.state)) restoreTools(ctx);
-    else gateTools(ctx);
+    const shouldGate = isGateActive(workflow.state) && workflow.state !== "implementing";
+    if (shouldGate) {
+      gateTools(ctx);
+      return;
+    }
+    // Dormant or implementing: only undo a restriction this extension applied.
+    // Never rewrite the active tool set we never touched.
+    if (gateApplied) restoreTools(ctx);
+    else updateStatus(ctx);
   }
 
   function sendUserPrompt(ctx: ExtensionContext, message: string): void {
@@ -419,7 +439,7 @@ export default function grillWizardExtension(pi: ExtensionAPI): void {
       };
     }
 
-    if (!gateAllowsMutation(workflow.state)) {
+    if (isGateActive(workflow.state)) {
       return {
         message: {
           customType: "pi-grill-wizard-enforcement",
@@ -433,7 +453,7 @@ export default function grillWizardExtension(pi: ExtensionAPI): void {
   pi.on("agent_settled", async (_event, ctx) => {
     if (workflow.state === "implementing") {
       setWorkflow(transitionState(workflow, "idle"), ctx);
-      gateTools(ctx);
+      applyToolsForState(ctx);
     }
   });
 

@@ -168,11 +168,22 @@ export function isReadOnlyShellCommand(command: string): boolean {
   return segments.length > 0 && segments.every(isReadOnlySegment);
 }
 
+const INACTIVE_STATES: ReadonlySet<GrillWorkflowState> = new Set(["idle", "cancelled"]);
+
+/**
+ * The gate owns tools, interception, and prompt context only while a workflow is
+ * actually running. `idle` and `cancelled` mean no questionnaire is in flight, so
+ * an installed but uninvoked extension must not affect unrelated Pi work.
+ */
+export function isGateActive(state: GrillWorkflowState): boolean {
+  return !INACTIVE_STATES.has(state);
+}
+
 export function gateAllowsMutation(state: GrillWorkflowState): boolean {
   // `approved` is a persisted review decision, not an execution turn. Keeping it
   // gated prevents later sibling tool calls from the questionnaire batch from
   // mutating before the queued specification starts its own agent turn.
-  return state === "implementing";
+  return !isGateActive(state) || state === "implementing";
 }
 
 export function mutationBlockReason(

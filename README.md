@@ -38,11 +38,21 @@ idle → discovering → preparing-questionnaire → answering → reviewing
                                                    ↘       cancelled
 ```
 
+Gate activity by state:
+
+| State | Gate | Tools |
+| --- | --- | --- |
+| `idle`, `cancelled` | dormant | normal |
+| `discovering`, `preparing-questionnaire`, `answering`, `reviewing`, `approved` | active | read-only |
+| `implementing` | active | restored |
+
 State transitions are checked in code. Session snapshots use Pi custom entries on active session branch. Questionnaire, exact custom answers, current position, summary edit, and state survive resume. Approval is bound to session ID; inherited approval from another/forked session returns to review.
 
 ## Mutation gate
 
-In every pre-implementation state, extension keeps mutation blocked. `approved` records explicit review choice but remains gated until queued specification starts dedicated `implementing` agent turn; this prevents later sibling tool calls from questionnaire batch bypassing handoff.
+Gate is dormant while workflow state is `idle` or `cancelled`. An installed but uninvoked extension does not restrict tools, intercept tool calls, inject enforcement context, or occupy footer status.
+
+While a workflow is active and not yet implementing, extension keeps mutation blocked. `approved` records explicit review choice but remains gated until queued specification starts dedicated `implementing` agent turn; this prevents later sibling tool calls from questionnaire batch bypassing handoff.
 
 1. Restricts active tools to previously active read-only discovery tools plus `grill_prepare_questionnaire`.
 2. Intercepts every `tool_call` and fails closed for unknown/mutating tools.
@@ -102,7 +112,7 @@ npm install
 npm test
 ```
 
-Tests exercise schema, three-alternative invariant, custom text preservation, navigation, cancellation/FSM, restoration, mutation blocking, approval gating, handoff, malformed output, and questionnaire size bounds.
+Tests exercise schema, three-alternative invariant, custom text preservation, navigation, cancellation/FSM, restoration, dormant-versus-active gate behavior, mutation blocking, approval gating, handoff, malformed output, and questionnaire size bounds.
 
 ## Limits
 
