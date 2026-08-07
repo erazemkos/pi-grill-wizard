@@ -7,6 +7,8 @@ export const READ_ONLY_TOOL_NAMES = new Set([
   "ls",
   "bash",
   "grill_prepare_questionnaire",
+  "grill_prepare_execution_plan",
+  "grill_complete_implementation",
 ]);
 
 const MUTATING_TOOL_NAME = /(^|[_-])(write|edit|patch|replace|apply|delete|remove|move|rename|create|generate|migrate|install|commit|checkout|reset|branch)([_-]|$)/i;
@@ -183,7 +185,7 @@ export function gateAllowsMutation(state: GrillWorkflowState): boolean {
   // `approved` is a persisted review decision, not an execution turn. Keeping it
   // gated prevents later sibling tool calls from the questionnaire batch from
   // mutating before the queued specification starts its own agent turn.
-  return !isGateActive(state) || state === "implementing";
+  return !isGateActive(state) || state === "implementing" || state === "orchestrating";
 }
 
 export function mutationBlockReason(

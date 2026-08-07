@@ -1,3 +1,4 @@
+import type { ExecutionPlan } from "../src/execution-plan.ts";
 import type { GrillQuestion, GrillQuestionnaire } from "../src/questionnaire-schema.ts";
 
 export function makeQuestion(id: string, category: string): GrillQuestion {
@@ -27,6 +28,40 @@ export function makeQuestion(id: string, category: string): GrillQuestion {
       },
     ],
     recommendedAlternativeId: `${id}-b`,
+  };
+}
+
+export function makeExecutionPlan(): ExecutionPlan {
+  return {
+    phases: [
+      {
+        id: "analyze",
+        title: "Analyze implementation seam",
+        objective: "Confirm exact files and constraints before mutation.",
+        dependsOn: [],
+        kind: "analysis",
+        scope: ["src"],
+        acceptanceCriteria: ["Implementation seam documented"],
+      },
+      {
+        id: "implement",
+        title: "Implement approved behavior",
+        objective: "Apply approved specification with one writer.",
+        dependsOn: ["analyze"],
+        kind: "implementation",
+        scope: ["src", "tests"],
+        acceptanceCriteria: ["Focused behavior implemented"],
+      },
+      {
+        id: "validate",
+        title: "Validate implementation",
+        objective: "Run focused tests and inspect regressions.",
+        dependsOn: ["implement"],
+        kind: "validation",
+        scope: ["tests"],
+        acceptanceCriteria: ["Tests and typecheck pass"],
+      },
+    ],
   };
 }
 

@@ -7,6 +7,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { executionPlanLines, type ExecutionPlan } from "./execution-plan.ts";
 import { answerText } from "./implementation-handoff.ts";
 import {
   allQuestionsAnswered,
@@ -30,7 +31,33 @@ export function isAnswerConfirmationInput(input: string): boolean {
   return matchesKey(input, Key.enter) || matchesKey(input, Key.right);
 }
 
-export type ReviewAction = "implement" | "question" | "summary" | "regenerate" | "cancel";
+export type ReviewAction =
+  | "implement-direct"
+  | "implement-subagents"
+  | "question"
+  | "summary"
+  | "regenerate"
+  | "cancel";
+
+export type ExecutionPlanReviewAction = "start" | "regenerate" | "questionnaire" | "cancel";
+
+export function reviewActionForInput(input: string, subagentsAvailable: boolean): ReviewAction | undefined {
+  if (input === "1") return "implement-direct";
+  if (input === "2" && subagentsAvailable) return "implement-subagents";
+  if (input === "3") return "question";
+  if (input === "4") return "summary";
+  if (input === "5") return "regenerate";
+  if (input === "6" || input === "q" || matchesKey(input, Key.escape)) return "cancel";
+  return undefined;
+}
+
+export function executionPlanReviewActionForInput(input: string): ExecutionPlanReviewAction | undefined {
+  if (input === "1") return "start";
+  if (input === "2") return "regenerate";
+  if (input === "3") return "questionnaire";
+  if (input === "4" || input === "q" || matchesKey(input, Key.escape)) return "cancel";
+  return undefined;
+}
 
 function editorTheme(theme: ExtensionContext["ui"]["theme"]): EditorTheme {
   return {
@@ -368,7 +395,11 @@ export function buildReviewLines(data: GrillWorkflowData): string[] {
   return lines;
 }
 
-export async function showReviewScreen(ctx: ExtensionContext, data: GrillWorkflowData): Promise<ReviewAction> {
+export async function showReviewScreen(
+  ctx: ExtensionContext,
+  data: GrillWorkflowData,
+  subagentsAvailable: boolean,
+): Promise<ReviewAction> {
   if (ctx.mode !== "tui") throw new Error("Grill Wizard review requires interactive TUI mode");
   return ctx.ui.custom<ReviewAction>((tui, theme, _keybindings, done) => {
     let scroll = 0;
@@ -380,11 +411,8 @@ export async function showReviewScreen(ctx: ExtensionContext, data: GrillWorkflo
     }
 
     function handleInput(input: string): void {
-      if (input === "1") done("implement");
-      else if (input === "2") done("question");
-      else if (input === "3") done("summary");
-      else if (input === "4") done("regenerate");
-      else if (input === "5" || input === "q" || matchesKey(input, Key.escape)) done("cancel");
+      const action = reviewActionForInput(input, subagentsAvailable);
+      if (action) done(action);
       else if (matchesKey(input, Key.up)) { scroll = Math.max(0, scroll - 1); refresh(); }
       else if (matchesKey(input, Key.down)) { scroll += 1; refresh(); }
       else if (matchesKey(input, Key.pageUp)) { scroll = Math.max(0, scroll - 15); refresh(); }
@@ -399,14 +427,67 @@ export async function showReviewScreen(ctx: ExtensionContext, data: GrillWorkflo
       const maxScroll = Math.max(0, body.length - 30);
       scroll = Math.min(scroll, maxScroll);
       const visible = body.slice(scroll, scroll + 30);
+      const subagentAction = subagentsAvailable
+        ? "2. Plan and implement with subagents"
+        : theme.fg("dim", "2. Plan and implement with subagents (unavailable: install pi-subagents)");
       const actions = [
         "",
         theme.fg("accent", theme.bold("Review actions")),
-        "1. Start implementation",
-        "2. Return to a specific question",
-        "3. Edit generated implementation summary",
-        "4. Regenerate entire questionnaire",
-        "5. Cancel without making changes",
+        "1. Implement directly",
+        subagentAction,
+        "3. Return to a specific question",
+        "4. Edit generated implementation summary",
+        "5. Regenerate entire questionnaire",
+        "6. Cancel without making changes",
+        theme.fg("dim", `↑↓/PgUp/PgDn scroll • ${scroll + 1}-${Math.min(scroll + 30, body.length)}/${body.length}`),
+      ];
+      cachedLines = [theme.fg("accent", "─".repeat(renderWidth)), ...visible, ...actions, theme.fg("accent", "─".repeat(renderWidth))];
+      return cachedLines;
+    }
+
+    return { render, handleInput, invalidate: () => { cachedLines = undefined; } };
+  });
+}
+
+export async function showExecutionPlanReviewScreen(
+  ctx: ExtensionContext,
+  plan: ExecutionPlan,
+): Promise<ExecutionPlanReviewAction> {
+  if (ctx.mode !== "tui") throw new Error("Grill Wizard execution-plan review requires interactive TUI mode");
+  return ctx.ui.custom<ExecutionPlanReviewAction>((tui, theme, _keybindings, done) => {
+    let scroll = 0;
+    let cachedLines: string[] | undefined;
+
+    function refresh(): void {
+      cachedLines = undefined;
+      tui.requestRender();
+    }
+
+    function handleInput(input: string): void {
+      const action = executionPlanReviewActionForInput(input);
+      if (action) done(action);
+      else if (matchesKey(input, Key.up)) { scroll = Math.max(0, scroll - 1); refresh(); }
+      else if (matchesKey(input, Key.down)) { scroll += 1; refresh(); }
+      else if (matchesKey(input, Key.pageUp)) { scroll = Math.max(0, scroll - 15); refresh(); }
+      else if (matchesKey(input, Key.pageDown)) { scroll += 15; refresh(); }
+    }
+
+    function render(width: number): string[] {
+      if (cachedLines) return cachedLines;
+      const renderWidth = Math.max(1, width);
+      const body: string[] = [];
+      addWrapped(body, renderWidth, theme.bold("Dependency-aware subagent execution plan"), " ");
+      executionPlanLines(plan).forEach((line) => addWrapped(body, renderWidth, line, " "));
+      const maxScroll = Math.max(0, body.length - 30);
+      scroll = Math.min(scroll, maxScroll);
+      const visible = body.slice(scroll, scroll + 30);
+      const actions = [
+        "",
+        theme.fg("accent", theme.bold("Execution-plan actions")),
+        "1. Start orchestrated implementation",
+        "2. Regenerate execution plan",
+        "3. Return to questionnaire review",
+        "4. Cancel without making changes",
         theme.fg("dim", `↑↓/PgUp/PgDn scroll • ${scroll + 1}-${Math.min(scroll + 30, body.length)}/${body.length}`),
       ];
       cachedLines = [theme.fg("accent", "─".repeat(renderWidth)), ...visible, ...actions, theme.fg("accent", "─".repeat(renderWidth))];

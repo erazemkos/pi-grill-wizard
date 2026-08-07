@@ -36,7 +36,7 @@ export function requiresApprovalReview(
   currentSessionId: string,
 ): boolean {
   return (
-    (workflow.state === "approved" || workflow.state === "implementing") &&
+    (workflow.state === "approved" || workflow.state === "implementing" || workflow.state === "orchestrating") &&
     (sourceSessionId !== currentSessionId || workflow.approvedSessionId !== currentSessionId)
   );
 }

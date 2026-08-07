@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildImplementationMessage, buildNormalizedSpecification } from "../src/implementation-handoff.ts";
+import {
+  buildExecutionPlanningMessage,
+  buildImplementationMessage,
+  buildNormalizedSpecification,
+  buildOrchestrationMessage,
+  buildOrchestrationResumeMessage,
+} from "../src/implementation-handoff.ts";
 import { setAlternativeAnswer, setCustomAnswer, type GrillWorkflowData } from "../src/state.ts";
-import { makeQuestionnaire } from "./fixtures.ts";
+import { makeExecutionPlan, makeQuestionnaire } from "./fixtures.ts";
 
 function answeredWorkflow(): GrillWorkflowData {
   const questionnaire = makeQuestionnaire();
@@ -56,6 +62,38 @@ test("edited summary cannot replace generated authoritative decisions", () => {
   const specification = buildNormalizedSpecification(workflow);
   assert.match(specification, /Use a different architecture/);
   assert.match(specification, /Balanced architecture/);
+});
+
+test("subagent handoff keeps main agent as dependency-aware one-writer orchestrator", () => {
+  const workflow: GrillWorkflowData = {
+    ...answeredWorkflow(),
+    implementationMode: "subagents",
+    executionPlan: makeExecutionPlan(),
+  };
+  const planning = buildExecutionPlanningMessage(workflow);
+  assert.match(planning, /Mutation remains blocked/);
+  assert.match(planning, /data-only dependency DAG/);
+  assert.match(planning, /Do not emit or execute workflowScript/);
+
+  const handoff = buildOrchestrationMessage(workflow);
+  for (const expected of [
+    /sole orchestrator/,
+    /action: "list"/,
+    /workflowScript/,
+    /stable phase keys/,
+    /every `runs\.all` result/,
+    /\.ok` value to be true/,
+    /one writer/,
+    /do not launch dependents/,
+    /contact_supervisor/,
+    /grill_complete_implementation/,
+  ]) assert.match(handoff, expected);
+
+  const resume = buildOrchestrationResumeMessage(workflow);
+  assert.match(resume, /reconcile subagent status and durable artifacts/);
+  assert.match(resume, /never rerun completed phases blindly/);
+  assert.match(resume, /every `runs\.all` result/);
+  assert.match(resume, /\.ok` value to be true/);
 });
 
 test("follow-up handoff retains prior approved specification", () => {

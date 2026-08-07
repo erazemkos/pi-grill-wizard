@@ -1,3 +1,4 @@
+import type { ExecutionPlan } from "./execution-plan.ts";
 import type { GrillQuestionnaire } from "./questionnaire-schema.ts";
 
 export type GrillWorkflowState =
@@ -6,9 +7,14 @@ export type GrillWorkflowState =
   | "preparing-questionnaire"
   | "answering"
   | "reviewing"
+  | "planning-orchestration"
+  | "reviewing-orchestration"
   | "approved"
   | "implementing"
+  | "orchestrating"
   | "cancelled";
+
+export type ImplementationMode = "direct" | "subagents";
 
 export interface AlternativeAnswer {
   kind: "alternative";
@@ -34,6 +40,8 @@ export interface GrillWorkflowData {
   approvedSpecificationHistory?: string[];
   toolsBeforeGate?: string[];
   approvedSessionId?: string;
+  implementationMode?: ImplementationMode;
+  executionPlan?: ExecutionPlan;
 }
 
 export const INITIAL_STATE: GrillWorkflowData = {
@@ -48,9 +56,12 @@ const ALLOWED_TRANSITIONS: Record<GrillWorkflowState, ReadonlySet<GrillWorkflowS
   discovering: new Set(["preparing-questionnaire", "cancelled"]),
   "preparing-questionnaire": new Set(["answering", "cancelled"]),
   answering: new Set(["reviewing", "preparing-questionnaire", "cancelled"]),
-  reviewing: new Set(["answering", "preparing-questionnaire", "approved", "cancelled"]),
-  approved: new Set(["implementing", "reviewing", "cancelled"]),
+  reviewing: new Set(["answering", "preparing-questionnaire", "planning-orchestration", "approved", "cancelled"]),
+  "planning-orchestration": new Set(["reviewing-orchestration", "reviewing", "cancelled"]),
+  "reviewing-orchestration": new Set(["planning-orchestration", "reviewing", "approved", "cancelled"]),
+  approved: new Set(["implementing", "orchestrating", "reviewing", "reviewing-orchestration", "cancelled"]),
   implementing: new Set(["answering", "reviewing", "idle", "cancelled"]),
+  orchestrating: new Set(["answering", "reviewing-orchestration", "idle", "cancelled"]),
   cancelled: new Set(["discovering"]),
 };
 
@@ -97,7 +108,9 @@ export function restartWorkflow(
     implementationSummary: undefined,
     approvedSpecificationHistory: [],
     approvedSessionId: undefined,
-    toolsBeforeGate: previous.toolsBeforeGate?.length ? [...previous.toolsBeforeGate] : [...toolsBeforeGate],
+    implementationMode: undefined,
+    executionPlan: undefined,
+    toolsBeforeGate: [...toolsBeforeGate],
   };
 }
 
@@ -174,13 +187,18 @@ export function normalizeRestoredState(value: unknown): GrillWorkflowData {
     ? Math.trunc(rawPosition)
     : 0;
   const currentPosition = Math.max(0, Math.min(questions.length > 0 ? questions.length - 1 : 0, safePosition));
+  const implementationMode = candidate.implementationMode === "direct" || candidate.implementationMode === "subagents"
+    ? candidate.implementationMode
+    : undefined;
   return {
     version: 1,
     state: candidate.state,
     topic: candidate.topic,
     originalObjective: candidate.originalObjective,
     questionnaire: candidate.questionnaire,
-    answers: candidate.answers && typeof candidate.answers === "object" ? cloneWorkflowData({ ...INITIAL_STATE, answers: candidate.answers }).answers : {},
+    answers: candidate.answers && typeof candidate.answers === "object"
+      ? cloneWorkflowData({ ...INITIAL_STATE, answers: candidate.answers }).answers
+      : {},
     currentPosition,
     implementationSummary: candidate.implementationSummary,
     approvedSpecificationHistory: Array.isArray(candidate.approvedSpecificationHistory)
@@ -188,5 +206,9 @@ export function normalizeRestoredState(value: unknown): GrillWorkflowData {
       : [],
     toolsBeforeGate: Array.isArray(candidate.toolsBeforeGate) ? [...candidate.toolsBeforeGate] : undefined,
     approvedSessionId: candidate.approvedSessionId,
+    implementationMode,
+    executionPlan: candidate.executionPlan && typeof candidate.executionPlan === "object"
+      ? cloneWorkflowData({ ...INITIAL_STATE, executionPlan: candidate.executionPlan }).executionPlan
+      : undefined,
   };
 }

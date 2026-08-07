@@ -71,7 +71,15 @@ test("inactive states never gate unrelated work", () => {
 });
 
 test("active pre-approval states stay gated", () => {
-  for (const state of ["discovering", "preparing-questionnaire", "answering", "reviewing", "approved"] as const) {
+  for (const state of [
+    "discovering",
+    "preparing-questionnaire",
+    "answering",
+    "reviewing",
+    "planning-orchestration",
+    "reviewing-orchestration",
+    "approved",
+  ] as const) {
     assert.equal(isGateActive(state), true);
     assert.equal(gateAllowsMutation(state), false);
     assert.match(mutationBlockReason(state, "write", { path: "x" }) ?? "", /blocks/);
@@ -81,9 +89,11 @@ test("active pre-approval states stay gated", () => {
 test("approval remains gated until dedicated implementing turn", () => {
   assert.equal(gateAllowsMutation("approved"), false);
   assert.equal(gateAllowsMutation("implementing"), true);
+  assert.equal(gateAllowsMutation("orchestrating"), true);
   assert.equal(gateAllowsMutation("reviewing"), false);
   assert.match(mutationBlockReason("approved", "write", {}) ?? "", /blocks/);
   assert.equal(mutationBlockReason("implementing", "write", {}), undefined);
+  assert.equal(mutationBlockReason("orchestrating", "write", {}), undefined);
 });
 
 test("active tool restriction and restoration preserve current and withheld tools", () => {

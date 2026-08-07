@@ -12,7 +12,7 @@ import {
   transitionState,
   type GrillWorkflowData,
 } from "../src/state.ts";
-import { makeQuestionnaire } from "./fixtures.ts";
+import { makeExecutionPlan, makeQuestionnaire } from "./fixtures.ts";
 
 test("custom answer remains exactly as written", () => {
   const original = "  first line\nsecond line\n  ";
@@ -49,6 +49,32 @@ test("session snapshot restores answers and position", () => {
   assert.deepEqual(restored.answers.product, { kind: "alternative", alternativeId: "product-b" });
 });
 
+test("subagent planning and orchestration transitions are explicit and persisted", () => {
+  let workflow = beginWorkflow("topic", ["read", "subagent"]);
+  workflow = transitionState(workflow, "preparing-questionnaire");
+  workflow = {
+    ...transitionState(workflow, "answering"),
+    questionnaire: makeQuestionnaire(),
+  };
+  workflow = transitionState(workflow, "reviewing");
+  workflow = {
+    ...transitionState(workflow, "planning-orchestration"),
+    implementationMode: "subagents",
+  };
+  workflow = {
+    ...transitionState(workflow, "reviewing-orchestration"),
+    executionPlan: makeExecutionPlan(),
+  };
+  workflow = { ...transitionState(workflow, "approved"), approvedSessionId: "session-a" };
+  workflow = transitionState(workflow, "orchestrating");
+
+  const restored = normalizeRestoredState(createSnapshot("session-a", workflow).workflow);
+  assert.equal(restored.state, "orchestrating");
+  assert.equal(restored.implementationMode, "subagents");
+  assert.deepEqual(restored.executionPlan, makeExecutionPlan());
+  assert.throws(() => transitionState(restored, "implementing"), /Invalid grill-wizard transition/);
+});
+
 test("foreign-session approval requires review", () => {
   const workflow: GrillWorkflowData = {
     version: 1,
@@ -60,6 +86,14 @@ test("foreign-session approval requires review", () => {
   };
   assert.equal(requiresApprovalReview(workflow, "session-a", "session-b"), true);
   assert.equal(requiresApprovalReview(workflow, "session-a", "session-a"), false);
+
+  const orchestrating: GrillWorkflowData = {
+    ...workflow,
+    state: "orchestrating",
+    implementationMode: "subagents",
+    executionPlan: makeExecutionPlan(),
+  };
+  assert.equal(requiresApprovalReview(orchestrating, "session-a", "session-b"), true);
 });
 
 test("inherited answer-map properties never count as answers", () => {
