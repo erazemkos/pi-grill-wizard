@@ -17,6 +17,13 @@ import {
 } from "./state.ts";
 
 export type WizardOutcome = "completed" | "cancel-requested";
+
+/** Wrap-around highlight movement inside one question's alternatives. */
+export function cycleHighlight(current: number, delta: -1 | 1, total: number): number {
+  if (total <= 0) return 0;
+  const safeCurrent = Number.isInteger(current) && current >= 0 && current < total ? current : 0;
+  return (safeCurrent + delta + total) % total;
+}
 export type ReviewAction = "implement" | "question" | "summary" | "regenerate" | "cancel";
 
 function editorTheme(theme: ExtensionContext["ui"]["theme"]): EditorTheme {
@@ -177,6 +184,16 @@ export async function runQuestionnaireWizard(
         refresh();
         return;
       }
+      if (matchesKey(input, Key.up) || input === "k") {
+        highlighted = cycleHighlight(highlighted, -1, currentQuestion().alternatives.length);
+        refresh();
+        return;
+      }
+      if (matchesKey(input, Key.down) || input === "j") {
+        highlighted = cycleHighlight(highlighted, 1, currentQuestion().alternatives.length);
+        refresh();
+        return;
+      }
       if (input === "4" || input === "e") {
         const answer = data.answers[currentQuestion().id];
         customEditor.setText(answer?.kind === "custom" ? answer.text : "");
@@ -291,7 +308,7 @@ export async function runQuestionnaireWizard(
         addWrapped(
           lines,
           renderWidth,
-          theme.fg("dim", "1/2/3 highlight • 4/e custom • Enter accept • ←/b previous • →/n next"),
+          theme.fg("dim", "↑↓/jk or 1/2/3 highlight • 4/e custom • Enter accept • ←/b previous • →/n next"),
           " ",
         );
         addWrapped(lines, renderWidth, theme.fg("dim", "r review answers • / search • q/Esc request cancel"), " ");

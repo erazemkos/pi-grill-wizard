@@ -5,16 +5,16 @@ Pi package that turns implementation requests into repository-aware decision que
 ## Install
 
 ```bash
-pi install /absolute/path/to/pi-grill-wizard
+pi install git:github.com/erazemkos/pi-grill-wizard
 ```
 
-For development:
+For development from a local clone:
 
 ```bash
-pi -e ./pi-grill-wizard
+pi -e .
 ```
 
-Package supplies extension plus optional `grill-wizard-methodology` skill.
+Package supplies extension only. `/grill-wizard` is sole entry point for Grill workflow activation.
 
 ## Commands
 
@@ -50,7 +50,7 @@ State transitions are checked in code. Session snapshots use Pi custom entries o
 
 ## Mutation gate
 
-Gate is dormant while workflow state is `idle` or `cancelled`. An installed but uninvoked extension does not restrict tools, intercept tool calls, inject enforcement context, or occupy footer status.
+Gate is dormant while workflow state is `idle` or `cancelled`. Questionnaire tool is inactive in dormant states, so its prompt guidance is absent until `/grill-wizard` activates workflow. An installed but uninvoked extension does not restrict normal tools, intercept tool calls, inject enforcement context, or occupy footer status.
 
 While a workflow is active and not yet implementing, extension keeps mutation blocked. `approved` records explicit review choice but remains gated until queued specification starts dedicated `implementing` agent turn; this prevents later sibling tool calls from questionnaire batch bypassing handoff.
 
@@ -76,13 +76,14 @@ Model must call `grill_prepare_questionnaire` once with full questionnaire. Runt
 - Relevant product, architecture, scope, compatibility, errors, security, testing, migration, and delivery coverage or explicit deferral.
 - Non-empty implementation phases and acceptance criteria.
 
-Semantic quality cannot be proven fully by static validation. Bundled methodology skill adds question-quality rules.
+Semantic quality cannot be proven fully by static validation.
 
 ## Wizard controls
 
 | Key | Action |
 | --- | --- |
-| `1`, `2`, `3` | Highlight proposed alternative |
+| `Up`/`Down`, `k`/`j` | Cycle highlighted alternative (wraps) |
+| `1`, `2`, `3` | Highlight proposed alternative directly |
 | `4`, `e` | Open multiline custom-answer editor |
 | `Enter` | Accept highlighted alternative and continue |
 | `Left`, `b` | Previous question |

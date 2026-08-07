@@ -126,14 +126,25 @@ export default function grillWizardExtension(pi: ExtensionAPI): void {
     updateStatus(ctx);
   }
 
+  function deactivateQuestionnaireToolWhileIdle(): void {
+    if (isGateActive(workflow.state)) return;
+    const active = pi.getActiveTools();
+    if (active.includes(TOOL_NAME)) {
+      pi.setActiveTools(active.filter((name) => name !== TOOL_NAME));
+    }
+  }
+
   function restoreTools(ctx: ExtensionContext): void {
     const registered = new Set(pi.getAllTools().map((tool) => tool.name));
     const restored = restoredToolSet(
       pi.getActiveTools(),
       restoredToolSet(processToolBaseline, workflow.toolsBeforeGate),
     ).filter((name) => registered.has(name));
-    processToolBaseline = [...restored];
-    pi.setActiveTools(restored);
+    const active = isGateActive(workflow.state)
+      ? restored
+      : restored.filter((name) => name !== TOOL_NAME);
+    processToolBaseline = [...active];
+    pi.setActiveTools(active);
     gateApplied = false;
     updateStatus(ctx);
   }
@@ -147,7 +158,10 @@ export default function grillWizardExtension(pi: ExtensionAPI): void {
     // Dormant or implementing: only undo a restriction this extension applied.
     // Never rewrite the active tool set we never touched.
     if (gateApplied) restoreTools(ctx);
-    else updateStatus(ctx);
+    else {
+      deactivateQuestionnaireToolWhileIdle();
+      updateStatus(ctx);
+    }
   }
 
   function sendUserPrompt(ctx: ExtensionContext, message: string): void {

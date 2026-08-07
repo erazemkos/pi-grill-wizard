@@ -122,24 +122,27 @@ test("approved snapshot stays gated until marked handoff turn", async () => {
   assert.ok(entries.length > 0);
 });
 
-test("dormant startup leaves the active tool set untouched", async () => {
+test("dormant startup deactivates questionnaire tool and `/grill-wizard` restores it", async () => {
   const handlers = new Map<string, Array<(event: any, ctx: any) => any>>();
   const initialTools = ["read", "bash", "write", "edit", "some_other_extension_tool"];
   let activeTools = [...initialTools];
   let setActiveToolsCalls = 0;
+  let commandHandler: ((rawArgs: string, ctx: any) => Promise<void>) | undefined;
 
   const pi = {
     registerTool(definition: { name: string }) {
       if (!activeTools.includes(definition.name)) activeTools.push(definition.name);
     },
-    registerCommand() {},
+    registerCommand(_name: string, definition: { handler: (rawArgs: string, ctx: any) => Promise<void> }) {
+      commandHandler = definition.handler;
+    },
     on(name: string, handler: (event: any, ctx: any) => any) {
       const current = handlers.get(name) ?? [];
       current.push(handler);
       handlers.set(name, current);
     },
     getActiveTools: () => [...activeTools],
-    getAllTools: () => activeTools.map((name) => ({ name })),
+    getAllTools: () => [...initialTools, "grill_prepare_questionnaire"].map((name) => ({ name })),
     setActiveTools(names: string[]) {
       setActiveToolsCalls += 1;
       activeTools = [...names];
@@ -161,16 +164,21 @@ test("dormant startup leaves the active tool set untouched", async () => {
   };
 
   grillWizardExtension(pi as any);
-  const toolsAfterRegistration = [...activeTools];
-  await handlers.get("session_start")![0]!({}, ctx);
-
+  // Loading must stay registration-only: Pi's pre-bind runtime throws on action methods.
   assert.equal(setActiveToolsCalls, 0);
-  assert.deepEqual(activeTools, toolsAfterRegistration);
+
+  await handlers.get("session_start")![0]!({}, ctx);
+  assert.equal(activeTools.includes("grill_prepare_questionnaire"), false);
+  assert.deepEqual(activeTools, initialTools);
   assert.equal(await handlers.get("before_agent_start")![0]!({ prompt: "unrelated" }, ctx), undefined);
   assert.equal(
     await handlers.get("tool_call")![0]!({ toolName: "write", input: { path: "x", content: "ok" } }, ctx),
     undefined,
   );
+
+  await commandHandler!("activate through command", ctx);
+  assert.equal(activeTools.includes("grill_prepare_questionnaire"), true);
+  assert.equal(activeTools.includes("write"), false);
 });
 
 test("active questionnaire state gates tools and injects enforcement context", async () => {
@@ -239,4 +247,24 @@ test("active questionnaire state gates tools and injects enforcement context", a
 
   const injected = await handlers.get("before_agent_start")![0]!({ prompt: "unrelated" }, ctx);
   assert.match(injected.message.content, /GRILL WIZARD STATE: answering/);
+});
+
+test("factory registers without calling runtime action methods", () => {
+  // Mirrors Pi's pre-bind runtime stubs: action methods throw during extension load.
+  const notInitialized = () => {
+    throw new Error("Extension runtime not initialized. Action methods cannot be called during extension loading.");
+  };
+  const pi = {
+    registerTool() {},
+    registerCommand() {},
+    on() {},
+    getActiveTools: notInitialized,
+    getAllTools: notInitialized,
+    setActiveTools: notInitialized,
+    appendEntry: notInitialized,
+    sendUserMessage: notInitialized,
+    sendMessage: notInitialized,
+  };
+
+  assert.doesNotThrow(() => grillWizardExtension(pi as any));
 });

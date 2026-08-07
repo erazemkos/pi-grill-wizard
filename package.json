@@ -10,6 +10,14 @@
     "approval-gate"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erazemkos/pi-grill-wizard.git"
+  },
+  "homepage": "https://github.com/erazemkos/pi-grill-wizard#readme",
+  "bugs": {
+    "url": "https://github.com/erazemkos/pi-grill-wizard/issues"
+  },
   "files": [
     "index.ts",
     "src",
@@ -22,9 +30,6 @@
   "pi": {
     "extensions": [
       "./index.ts"
-    ],
-    "skills": [
-      "./skills"
     ]
   },
   "scripts": {
