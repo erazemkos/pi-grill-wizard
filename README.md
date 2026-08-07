@@ -85,9 +85,9 @@ Semantic quality cannot be proven fully by static validation.
 | `Up`/`Down`, `k`/`j` | Cycle highlighted alternative (wraps) |
 | `1`, `2`, `3` | Highlight proposed alternative directly |
 | `4`, `e` | Open multiline custom-answer editor |
-| `Enter` | Accept highlighted alternative and continue |
+| `Enter`, `Right` | Accept highlighted alternative and continue |
 | `Left`, `b` | Previous question |
-| `Right`, `n` | Next question |
+| `n` | Next question without changing its answer |
 | `r` | Review answered/unanswered questions |
 | `/` | Search question/category text |
 | `q`, `Escape` | Request cancellation; confirmation follows |

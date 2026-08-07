@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildReviewLines, cycleHighlight } from "../src/questionnaire-ui.ts";
+import { buildReviewLines, cycleHighlight, isAnswerConfirmationInput } from "../src/questionnaire-ui.ts";
 import { setAlternativeAnswer, type GrillWorkflowData } from "../src/state.ts";
 import { makeQuestionnaire } from "./fixtures.ts";
 
@@ -15,6 +15,12 @@ test("highlight cycling tolerates malformed or empty input", () => {
   assert.equal(cycleHighlight(Number.NaN, 1, 3), 1);
   assert.equal(cycleHighlight(99, -1, 3), 2);
   assert.equal(cycleHighlight(0, 1, 0), 0);
+});
+
+test("Enter and Right accept the highlighted answer while n remains navigation", () => {
+  assert.equal(isAnswerConfirmationInput("\r"), true);
+  assert.equal(isAnswerConfirmationInput("\x1b[C"), true);
+  assert.equal(isAnswerConfirmationInput("n"), false);
 });
 
 test("review lines list every question and selected answer", () => {

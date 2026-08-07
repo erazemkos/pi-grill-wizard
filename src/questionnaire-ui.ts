@@ -24,6 +24,12 @@ export function cycleHighlight(current: number, delta: -1 | 1, total: number): n
   const safeCurrent = Number.isInteger(current) && current >= 0 && current < total ? current : 0;
   return (safeCurrent + delta + total) % total;
 }
+
+/** Enter and Right both accept the highlighted answer. */
+export function isAnswerConfirmationInput(input: string): boolean {
+  return matchesKey(input, Key.enter) || matchesKey(input, Key.right);
+}
+
 export type ReviewAction = "implement" | "question" | "summary" | "regenerate" | "cancel";
 
 function editorTheme(theme: ExtensionContext["ui"]["theme"]): EditorTheme {
@@ -201,7 +207,7 @@ export async function runQuestionnaireWizard(
         refresh();
         return;
       }
-      if (matchesKey(input, Key.enter)) {
+      if (isAnswerConfirmationInput(input)) {
         const question = currentQuestion();
         update(setAlternativeAnswer(data, question.id, question.alternatives[highlighted]!.id));
         advanceAfterAnswer();
@@ -211,7 +217,7 @@ export async function runQuestionnaireWizard(
         move(-1);
         return;
       }
-      if (matchesKey(input, Key.right) || input === "n") {
+      if (input === "n") {
         move(1);
         return;
       }
@@ -308,7 +314,7 @@ export async function runQuestionnaireWizard(
         addWrapped(
           lines,
           renderWidth,
-          theme.fg("dim", "↑↓/jk or 1/2/3 highlight • 4/e custom • Enter accept • ←/b previous • →/n next"),
+          theme.fg("dim", "↑↓/jk or 1/2/3 highlight • 4/e custom • Enter/→ accept • ←/b previous • n next"),
           " ",
         );
         addWrapped(lines, renderWidth, theme.fg("dim", "r review answers • / search • q/Esc request cancel"), " ");
