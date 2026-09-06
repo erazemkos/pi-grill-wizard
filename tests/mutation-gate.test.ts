@@ -56,7 +56,9 @@ test("blocks mutating and unknown tools while a workflow is active", () => {
   assert.match(mutationBlockReason("reviewing", "write", { path: "x" }) ?? "", /blocks/);
   assert.match(mutationBlockReason("discovering", "apply_patch", {}) ?? "", /blocks/);
   assert.match(mutationBlockReason("answering", "third_party_generator", {}) ?? "", /blocks/);
-  assert.equal(mutationBlockReason("discovering", "read", { path: "x" }), undefined);
+  for (const toolName of ["read", "web_search", "fetch_content", "get_search_content", "source_check"]) {
+    assert.equal(mutationBlockReason("discovering", toolName, {}), undefined, toolName);
+  }
   assert.equal(mutationBlockReason("discovering", "bash", { command: "git status" }), undefined);
 });
 
@@ -97,6 +99,9 @@ test("approval remains gated until dedicated implementing turn", () => {
 });
 
 test("active tool restriction and restoration preserve current and withheld tools", () => {
-  assert.deepEqual(restrictedToolSet(["read", "write", "bash", "custom"]), ["read", "bash"]);
+  assert.deepEqual(
+    restrictedToolSet(["read", "write", "bash", "web_search", "source_check", "custom"]),
+    ["read", "bash", "web_search", "source_check"],
+  );
   assert.deepEqual(restoredToolSet(["read", "new-tool"], ["read", "write"]), ["read", "new-tool", "write"]);
 });
